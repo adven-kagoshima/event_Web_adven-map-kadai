@@ -101,9 +101,8 @@
         container.className = "unity-mobile";
         canvas.className = "unity-mobile";
 
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
+        // スマホは画素密度(3 前後)のまま描くと重く発熱するので、1.5 倍までに抑える
+        config.devicePixelRatio = Math.min(window.devicePixelRatio, 1.5);
 
 
       } else {
