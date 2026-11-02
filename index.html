@@ -31,6 +31,26 @@
     </div>
     <script>
 
+      // 中身の分からない「Script error.」は、Unity に渡さない。
+      // Unity の loader.js はページで起きたエラーを全部拾い、読み込み中なら読み込みを止め、そのあとなら警告を出す。
+      // 「Script error.」は別のサイトのスクリプト(Chatwork などのアプリ内ブラウザが差し込むもの)のエラーで、
+      // ゲームのスクリプトは同じサイトから読むので、ゲームのエラーなら中身が付いている。
+      // capture で先に受け、後ろの loader.js のリスナーに届かないようにする
+      window.addEventListener("error", function (e) {
+        if (e.message === "Script error." && !e.error) {
+          console.warn("ほかのスクリプトのエラーを無視しました(Script error.)");
+          e.stopImmediatePropagation();
+        }
+      }, true);
+
+      // スマホ(タッチ操作)として扱うか。判定はここだけで行い、Unity 側(DeviceDetection.cs)も
+      // WebGLDeviceDetect.jslib を通してこの結果を使う。
+      // URL の ?mobile=1(スマホとして扱う)/ ?mobile=0(PC として扱う)で上書きできる。指定がなければ、
+      // ブラウザが「主に指で操作する端末」と報告するか(pointer: coarse)。UA は見ない(iPad は Mac と名乗るため)
+      var mobileParam = /[?&]mobile=([01])/.exec(location.search);
+      var isMobile = mobileParam ? mobileParam[1] === "1" : window.matchMedia("(pointer: coarse)").matches;
+      window.unityDevice = { mobile: isMobile, forced: mobileParam !== null };
+
       var container = document.querySelector("#unity-container");
       var canvas = document.querySelector("#unity-canvas");
       var loadingBar = document.querySelector("#unity-loading-bar");
@@ -91,7 +111,7 @@
       // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
       // expected to change.
 
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      if (isMobile) {
         // Mobile device style: fill the whole browser client area with the game canvas:
 
         var meta = document.createElement('meta');
@@ -135,22 +155,20 @@
       }
       
       document.addEventListener('DOMContentLoaded', () => {
-        // モバイルデバイスの場合のみ画面の向きをチェック
-        if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-          if(screen.orientation.angle === 0 || screen.orientation.angle === 180) {
-            const dialog = document.querySelector('dialog');
-            dialog.showModal();
-            
-            // dialogがcloseされた時にUnityを読み込む
-            dialog.addEventListener('close', () => {
-              loadUnity();
-            });
-          } else {
-            // 横向きの場合は即座に読み込み開始
+        // スマホで縦向きのときだけ、「横向きにしよう」と案内してから読み込む
+        // (screen.orientation は iOS 16.4 から、dialog.showModal は iOS 15.4 からなので、
+        //  どちらにも頼らない。使えないところで止まると、ゲームが読み込まれなくなる)
+        var dialog = document.querySelector('dialog');
+        var portrait = window.matchMedia("(orientation: portrait)").matches;
+        if (isMobile && portrait && typeof dialog.showModal === "function") {
+          dialog.showModal();
+
+          // dialogがcloseされた時にUnityを読み込む
+          dialog.addEventListener('close', () => {
             loadUnity();
-          }
+          });
         } else {
-          // PCの場合は即座に読み込み開始
+          // PC・横向き・ダイアログが使えないブラウザは即座に読み込み開始
           loadUnity();
         }
       });
